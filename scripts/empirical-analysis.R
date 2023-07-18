@@ -7,6 +7,7 @@ library(stargazer)
 library(dplyr)
 library(ggplot2)
 library(reshape2)
+library(psych)
 
 # Read the Stata dataset
 data <- haven::read_dta("dataDEF.dta")
@@ -93,4 +94,93 @@ data$officialbribe_acceptance <- ifelse(data$officialbribe_acceptance == 3 | dat
 data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance > 3, NA, data$stealingfood_acceptance)
 data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance == 2 | data)
                                        
-                                       
+# Generate Table 2: Explanatory Variables
+
+# Perform t-test
+s4 <- t.test(community_support_n ~ sample)
+s4 <- cbind(s4$estimate[1:2], s4$stderr[1:2])
+
+# Create a data frame for the table
+table_data <- data.frame(
+  Roma = s4[1, 1:2],
+  Non_Roma = s4[2, 1:2]
+)
+
+# Set the row names
+rownames(table_data) <- c("Community support", "Own norms")
+
+# Create column names
+colnames(table_data) <- c("Mean", "SE")
+
+# Print the table
+stargazer(table_data, title = "Explanatory variables", column.labels = c("Roma", "Non-Roma"), digits = 2, header = TRUE)
+
+# Create interaction terms for explanatory variables
+data$community_support_ni <- data$sample * data$community_support_n
+data$own_norms_ni <- data$sample * data$own_norms_n
+data$discrimination_ethnicity_i <- data$discrimination_ethnicity * data$sample
+
+# Label variables
+label(data$community_support_n) <- "Community support"
+label(data$community_support_ni) <- "Community support x Roma"
+label(data$own_norms_n) <- "Follow own norms"
+label(data$own_norms_ni) <- "Follow own norms x Roma"
+label(data$discrimination_ethnicity) <- "Ethnic discrimination"
+label(data$discrimination_ethnicity_i) <- "Discriminated for ethnicity x Roma"
+
+# ADDITIONAL CONTROLS
+
+# Create an asset index
+
+data <- data.frame(
+  radio, tv, bike, car, horse, computer, internet, phone, washingmachine,
+  bed_foreach, books30, powergenerator, kitchen, piped, toilet, wastewater,
+  bathroom, electricity, heating
+)
+kmo <- KMO(data)
+comp1 <- principal(data)$values[, 1]
+hist(comp1)
+colnames(comp1) <- "asset_score"
+xtile(asset_index <- comp1, n = 5)
+
+# Label asset index variable
+levels(asset_index) <- c("Poorest", "Poorer", "Middle", "Richer", "Richest")
+label(asset_index) <- "Asset index"
+
+# Create Table 3 "Characteristics of the respondents"
+label(age) <- "Age"
+label(educ_years) <- "Educational years"
+label(unemployed) <- "Unemployed"
+label(food_insecurity) <- "Food insecurity"
+label(health_insurance) <- "Health insurance"
+label(good_health) <- "Self-reported good health"
+label(health_behavior) <- "Avoidance of medical screening"
+label(female) <- "Percentage of females"
+label(afford_n) <- "Economic security"
+
+# Subset the data for different samples
+summary_data1 <- subset(data, sample == 1)
+summary_data0 <- subset(data, sample == 0)
+
+# Print the summary statistics using stargazer
+stargazer(summary_data1, title = "Sample 1 Characteristics", digits = 2, type = "text")
+stargazer(summary_data0, title = "Sample 0 Characteristics", digits = 2, type = "text")
+
+# EMPIRICAL ANALYSIS
+
+# 1) Occurrence of health services
+
+# a) Logistic regression for occurrence of healthcare (Table 4)
+type_neighbourhood <- c("town", "village", "capital", "city", "unregulated_area")
+
+# Run logistic regression model
+model <- glm(screening_initiative ~ community_support_n + sample + own_norms_n + discrimination_ethnicity + age + no_educ + female + afford_n + health_insurance + country + asset_index, data = data, family = "binomial")
+
+# Cluster-robust standard errors
+vcov <- sandwich::vcovCL(model, cluster = data$municipality_n)
+
+# Create a table with coefficient estimates
+coef_table <- cbind(coef(model), sqrt(diag(vcov)))
+
+# Print the table
+stargazer(coef_table, title = "Logistic Regression Results", column.labels = c("Estimate", "SE"), digits = 2, header = TRUE)
