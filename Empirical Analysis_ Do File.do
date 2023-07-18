@@ -1,7 +1,7 @@
 **** -------- DESCRIPTIVE STATISTICS -------
 clear all
 capture: log close 
-cd "/Users/antoniomarchitto/Desktop/DATASET/data"
+// cd "/Users/antoniomarchitto/Desktop/DATASET/data"
 use dataDEF.dta
 
 *First table - Percentage of Roma for each country
