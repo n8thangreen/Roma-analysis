@@ -1,4 +1,7 @@
-# Load required libraries
+#
+#
+#
+
 library(foreign)
 library(estimatr)
 library(sandwich)
@@ -17,7 +20,7 @@ country_labels <- names(attributes(data$country)$labels)
 sample_labels <- names(attributes(data$sample)$labels)
 
 data$country_labels <- country_labels[data$country]
-data$sample_labels <- sample_labels[data$sample+1]
+data$sample_labels <- sample_labels[data$sample + 1]
 
 # First table - Percentage of Roma for each country
 tab <- as.data.frame(table(data$sample, data$country))
@@ -125,8 +128,9 @@ summary_tab <-
   bind_rows(tab_all, tab_01) |>
   t() |>
   as.data.frame() |> 
-  mutate(across(all_of(c("All", "0", "1")), \(x) round(x, 2)),
-         diff = `0` - `1`)
+  mutate(diff = `0` - `1`,
+         across(all_of(c("All", "0", "1", "diff")), \(x) round(x, 2))) |> 
+  rename(`Non-Roma` = `0`, Roma = `1`)
 
 write.csv(summary_tab, file = "../output/summary_tab.csv")
 
@@ -135,15 +139,26 @@ write.csv(summary_tab, file = "../output/summary_tab.csv")
 # Presentation of EXPLANATORY VARIABLES
 
 # 1) Community support
+##TODO: should this be 96: No one?
 data$community_support <- ifelse(data$first_support > 0 | data$second_support > 0 | data$third_support > 0, 1, 0)
+data$community_support <- ifelse(data$first_support != 96 | data$second_support != 96 | data$third_support != 96, 1, 0)
+
+##TODO: why do this?
 data$community_support_n <- (data$community_support - 0) / 3
 
 tab_community_support_n <- as.data.frame(table(data$community_support_n, data$sample))
 colnames(tab_community_support_n) <- c("community_support_n", "sample", "count")
 tab_community_support_n
-data <- subset(data, select = -c(first_support, second_support, third_support, community_support))
+
+# data <- subset(data, select = -c(first_support, second_support, third_support, community_support))
 
 # 2) Follow Own norms
+# value       label
+# 1          Always acceptable
+# 2       Sometimes acceptable
+# 3           Never acceptable
+# 888998 RF/DK (Refused/Don't Know)
+
 data$citizenbribe_acceptance <- ifelse(data$citizenbribe_acceptance > 3, NA, data$citizenbribe_acceptance)
 data$citizenbribe_acceptance <- ifelse(data$citizenbribe_acceptance == 3 | data$citizenbribe_acceptance == 2, 0, data$citizenbribe_acceptance)
 
@@ -154,12 +169,14 @@ data$officialbribe_acceptance <- ifelse(data$officialbribe_acceptance > 3, NA, d
 data$officialbribe_acceptance <- ifelse(data$officialbribe_acceptance == 3 | data$officialbribe_acceptance == 2, 0, data$officialbribe_acceptance)
 
 data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance > 3, NA, data$stealingfood_acceptance)
+
+##Error
 data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance == 2 | data)
-                                       
+
 # Generate Table 2: Explanatory Variables
 
 # Perform t-test
-s4 <- t.test(community_support_n ~ sample)
+s4 <- t.test(community_support_n ~ sample, data = data)
 s4 <- cbind(s4$estimate[1:2], s4$stderr[1:2])
 
 # Create a data frame for the table
@@ -168,10 +185,7 @@ table_data <- data.frame(
   Non_Roma = s4[2, 1:2]
 )
 
-# Set the row names
 rownames(table_data) <- c("Community support", "Own norms")
-
-# Create column names
 colnames(table_data) <- c("Mean", "SE")
 
 # Print the table
@@ -190,15 +204,13 @@ label(data$own_norms_ni) <- "Follow own norms x Roma"
 label(data$discrimination_ethnicity) <- "Ethnic discrimination"
 label(data$discrimination_ethnicity_i) <- "Discriminated for ethnicity x Roma"
 
-# ADDITIONAL CONTROLS
-
 # Create an asset index
 
 data <- data.frame(
   radio, tv, bike, car, horse, computer, internet, phone, washingmachine,
   bed_foreach, books30, powergenerator, kitchen, piped, toilet, wastewater,
-  bathroom, electricity, heating
-)
+  bathroom, electricity, heating)
+
 kmo <- KMO(data)
 comp1 <- principal(data)$values[, 1]
 hist(comp1)
@@ -228,21 +240,34 @@ summary_data0 <- subset(data, sample == 0)
 stargazer(summary_data1, title = "Sample 1 Characteristics", digits = 2, type = "text")
 stargazer(summary_data0, title = "Sample 0 Characteristics", digits = 2, type = "text")
 
-# EMPIRICAL ANALYSIS
+
+##############
+# regressions
 
 # 1) Occurrence of health services
 
 # a) Logistic regression for occurrence of healthcare (Table 4)
 type_neighbourhood <- c("town", "village", "capital", "city", "unregulated_area")
 
-# Run logistic regression model
-model <- glm(screening_initiative ~ community_support_n + sample + own_norms_n + discrimination_ethnicity + age + no_educ + female + afford_n + health_insurance + country + asset_index, data = data, family = "binomial")
+# logistic regression model
+##TODO: interaction term for sample*community_support?
+
+model0_si <- glm(screening_initiative ~ community_support_n*sample,
+                 data = data, family = "binomial")
+
+model_si <- glm(screening_initiative ~ community_support_n + sample + own_norms_n + discrimination_ethnicity + age + no_educ + female + afford_n + health_insurance + country + asset_index,
+                data = data, family = "binomial")
 
 # Cluster-robust standard errors
-vcov <- sandwich::vcovCL(model, cluster = data$municipality_n)
+vcov <- sandwich::vcovCL(model_si, cluster = data$municipality_n)
 
 # Create a table with coefficient estimates
-coef_table <- cbind(coef(model), sqrt(diag(vcov)))
+coef_table <- cbind(coef(model_si), sqrt(diag(vcov)))
 
-# Print the table
 stargazer(coef_table, title = "Logistic Regression Results", column.labels = c("Estimate", "SE"), digits = 2, header = TRUE)
+
+# 2) Health behaviour
+
+model0_hb <- glm(health_behavior ~ community_support*sample,
+                 data = data, family = "binomial")
+
