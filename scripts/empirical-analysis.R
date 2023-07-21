@@ -10,7 +10,7 @@ library(reshape2)
 library(psych)
 
 # Read the Stata dataset
-data <- haven::read_dta("dataDEF.dta")
+data <- haven::read_dta("../data/dataDEF.dta")
 
 country_labels <- names(attributes(data$country)$labels)
 sample_labels <- names(attributes(data$sample)$labels)
@@ -37,7 +37,7 @@ data$screening_initiative_non <- ifelse(data$screening_initiative == 0 & data$sa
 
 plot_dat <- data |>
   group_by(country_labels, sample_labels) |> 
-  summarise(prop = sum(screening_initiative)/n())
+  summarise(prop = sum(screening_initiative, na.rm = TRUE)/n())
 
 # Graph bar
 ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))) +
@@ -45,7 +45,7 @@ ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))
   labs(title = "Access to healthcare services") +
   labs(fill = "Screening initiative") +
   theme_bw()
-
+# geom_boxplot(position = position_dodge()) +
 
 # 2) Health behavior
 tab_health_behavior <- as.data.frame(table(data$health_behavior))
