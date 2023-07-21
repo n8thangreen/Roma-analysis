@@ -38,16 +38,31 @@ data$screening_initiative_non <- ifelse(data$screening_initiative == 0 & data$sa
 
 plot_dat <- data |>
   group_by(country_labels, sample_labels) |> 
-  summarise(prop = sum(screening_initiative, na.rm = TRUE)/n())
+  summarise(prop = sum(screening_initiative, na.rm = TRUE)/n(),
+            n = n()) |> 
+  mutate(low = prop - 1.96*sqrt(prop*(1-prop)/n),
+         upp = prop + 1.96*sqrt(prop*(1-prop)/n))
 
 # Graph bar
 ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))) +
   geom_bar(stat="identity", position="dodge") +
   labs(title = "Access to healthcare services") +
   labs(fill = "Screening initiative") +
-  theme_bw()
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
 ggsave("../plots/barplot_healthcare_access.png", width = 8, height = 7)
+
+# box plot
+ggplot(plot_dat, aes(country_labels, prop)) +
+  geom_errorbar(
+    aes(ymin = low, ymax = upp, color = factor(sample_labels)),
+    position = position_dodge(0.3), width = 0.2) +
+  ylim(0,1) +
+  geom_point(aes(color = factor(sample_labels)), position = position_dodge(0.3)) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+ggsave("../plots/boxplot_healthcare_access.png", width = 8, height = 7)
 
 # 2) Health behavior
 tab_health_behavior <- as.data.frame(table(data$health_behavior))
@@ -62,7 +77,10 @@ data$health_behavior_non <- ifelse(data$health_behavior == 0 & data$sample == 2,
 
 plot_dat <- data |>
   group_by(country_labels, sample_labels) |> 
-  summarise(prop = sum(health_behavior, na.rm = TRUE)/n())
+  summarise(prop = sum(health_behavior, na.rm = TRUE)/n(),
+            n = n()) |> 
+  mutate(low = prop - 1.96*sqrt(prop*(1-prop)/n),
+         upp = prop + 1.96*sqrt(prop*(1-prop)/n))
 
 # Graph bar
 ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))) +
@@ -72,6 +90,18 @@ ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))
   theme_bw()
 
 ggsave("../plots/barplot_unmet_need.png", width = 8, height = 7)
+
+# box plot
+ggplot(plot_dat, aes(country_labels, prop)) +
+  geom_errorbar(
+    aes(ymin = low, ymax = upp, color = factor(sample_labels)),
+    position = position_dodge(0.3), width = 0.2) +
+  ylim(0,1) +
+  geom_point(aes(color = factor(sample_labels)), position = position_dodge(0.3)) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+
+ggsave("../plots/boxplot_unmet_need.png", width = 8, height = 7)
+
 
 ################
 # summary table
