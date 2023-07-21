@@ -8,6 +8,7 @@ library(dplyr)
 library(ggplot2)
 library(reshape2)
 library(psych)
+library(tidyr)
 
 # Read the Stata dataset
 data <- haven::read_dta("../data/dataDEF.dta")
@@ -45,7 +46,8 @@ ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))
   labs(title = "Access to healthcare services") +
   labs(fill = "Screening initiative") +
   theme_bw()
-# geom_boxplot(position = position_dodge()) +
+
+ggsave("../plots/barplot_healthcare_access.png", width = 8, height = 7)
 
 # 2) Health behavior
 tab_health_behavior <- as.data.frame(table(data$health_behavior))
@@ -69,7 +71,37 @@ ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))
   labs(fill = "Health-care avoidance") +
   theme_bw()
 
+ggsave("../plots/barplot_unmet_need.png", width = 8, height = 7)
 
+################
+# summary table
+
+variable_names <- c("discrimination_ethnicity", "age", "no_educ", "female", "afford_n", "health_insurance", "country")
+
+tab_01 <- data |> 
+  select(all_of(c("sample", variable_names))) |> 
+  group_by(sample) |> 
+  summarise(across(all_of(variable_names), \(x) mean(x, na.rm = TRUE))) |> 
+  mutate(sample = as.character(sample)) |> 
+  tibble::column_to_rownames(var = "sample")
+
+tab_all <- data |> 
+  select(all_of(c("sample", variable_names))) |> 
+  summarise(across(all_of(variable_names), \(x) mean(x, na.rm = TRUE))) |> 
+  mutate(sample = "All") |> 
+  tibble::column_to_rownames(var = "sample")
+
+summary_tab <- 
+  bind_rows(tab_all, tab_01) |>
+  t() |>
+  as.data.frame() |> 
+  mutate(across(all_of(c("All", "0", "1")), \(x) round(x, 2)),
+         diff = `0` - `1`)
+
+write.csv(summary_tab, file = "../output/summary_tab.csv")
+
+
+########################################
 # Presentation of EXPLANATORY VARIABLES
 
 # 1) Community support
