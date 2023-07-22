@@ -192,18 +192,19 @@ data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance > 3, NA, dat
 data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance == 2 | data)
 
 # Create an asset index
-data_asset <- data.frame(
+data_asset <- with(data, data.frame(
   radio, tv, bike, car, horse, computer, internet, phone, washingmachine,
   bed_foreach, books30, powergenerator, kitchen, piped, toilet, wastewater,
-  bathroom, electricity, heating)
+  bathroom, electricity, heating))
 
 # Measure of Sampling Adequacy
 kmo <- KMO(data_asset)
-comp1 <- principal(data_asset)$values[, 1]
-hist(comp1)
-colnames(comp1) <- "asset_score"
-xtile(asset_index <- comp1, n = 5)
 
+# PCA
+pcs_res <- principal(data_asset)
+asset_scores <- pcs_res$scores
+asset_quantiles <- quantile(asset_scores, na.rm = TRUE)
+asset_index <- cut(asset_index, breaks = asset_quantiles)
 levels(asset_index) <- c("Poorest", "Poorer", "Middle", "Richer", "Richest")
 
 data_Roma <- subset(data, sample == 1)
