@@ -104,13 +104,15 @@ tab_var_names <- c("discrimination_ethnicity", "age", "no_educ", "female", "affo
 tab_01 <- data |> 
   select(all_of(c("sample", tab_var_names))) |> 
   group_by(sample) |> 
-  summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE))) |> 
+  summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE)),
+            n = n()) |> 
   mutate(sample = as.character(sample)) |> 
   tibble::column_to_rownames(var = "sample")
 
 tab_all <- data |> 
   select(all_of(c("sample", tab_var_names))) |> 
-  summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE))) |> 
+  summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE)), 
+            n = n()) |> 
   mutate(sample = "All") |> 
   tibble::column_to_rownames(var = "sample")
 
@@ -120,7 +122,14 @@ summary_tab <-
   as.data.frame() |> 
   mutate(diff = `0` - `1`,
          across(all_of(c("All", "0", "1", "diff")), \(x) round(x, 2))) |> 
-  rename(`Non-Roma` = `0`, Roma = `1`)
+  rename(`Non-Roma` = `0`, Roma = `1`) |> 
+  mutate(var0 = `Non-Roma`*(1-`Non-Roma`)/2168,
+         var1 = `Roma`*(1-`Roma`)/4592,
+         sd_total = sqrt(var0 + var1),
+         p = dnorm(diff, mean = 0, sd = sd_total),
+         signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")))
+
+summary_tab
 
 write.csv(summary_tab, file = "../output/summary_tab.csv")
 
