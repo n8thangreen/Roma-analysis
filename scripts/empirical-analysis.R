@@ -133,7 +133,7 @@ ggsave("../plots/boxplot_unmet_need.png", width = 8, height = 7)
 ################
 # summary table
 
-tab_var_names <- c("discrimination_ethnicity", "age", "no_educ", "female", "afford_n", "health_insurance", "country")
+tab_var_names <- c("discrimination_ethnicity", "age", "no_educ", "female", "afford_n", "health_insurance")# , "country")
 
 tab_01 <- data |> 
   select(all_of(c("sample", tab_var_names))) |> 
@@ -175,7 +175,11 @@ summary_tab <-
   data.table::dcast(variable ~ stat, value.var = c("All", "Non-Roma", "Roma", "Diff")) |> 
   mutate(
     `sd total` = signif(sqrt(Roma_sd^2 + `Non-Roma_sd`^2), 3),
-    p = signif(dnorm(Diff_mean, mean = 0, sd = `sd total`), 3),
+    p = ifelse(variable == "age",
+      signif(dnorm(Diff_mean, mean = 0, sd = `sd total`), 3),
+        # two-proportions z-test
+      signif(2*pnorm(abs(Diff_mean)/sqrt(All_mean*(1-All_mean)*(1/4592 + 1/2168)), lower.tail = FALSE), 3)
+      ),
     Signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")),
     # clean covariate names
     variable = gsub("_", " ", variable) |> stringr::str_to_sentence())
