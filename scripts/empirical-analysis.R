@@ -138,15 +138,21 @@ tab_var_names <- c("discrimination_ethnicity", "age", "no_educ", "female", "affo
 tab_01 <- data |> 
   select(all_of(c("sample", tab_var_names))) |> 
   group_by(sample) |> 
-  summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE)),
-            n = n()) |> 
+  summarise(across(all_of(tab_var_names), list(mean = \(x) mean(x, na.rm = TRUE),
+                                               sd = \(x) sd(x, na.rm = TRUE)), .names = "{.col}.{.fn}")
+            # summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE)),
+            # n = n()
+  ) |> 
   mutate(sample = as.character(sample)) |> 
   tibble::column_to_rownames(var = "sample")
 
 tab_all <- data |> 
   select(all_of(c("sample", tab_var_names))) |> 
-  summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE)), 
-            n = n()) |> 
+  summarise(across(all_of(tab_var_names), list(mean = \(x) mean(x, na.rm = TRUE),
+                                               sd = \(x) sd(x, na.rm = TRUE)), .names = "{.col}.{.fn}"),
+            # summarise(across(all_of(tab_var_names), \(x) mean(x, na.rm = TRUE)), 
+            # n = n()
+  ) |> 
   mutate(sample = "All") |> 
   tibble::column_to_rownames(var = "sample")
 
@@ -157,15 +163,22 @@ summary_tab <-
   mutate(Diff = `0` - `1`,
          across(all_of(c("All", "0", "1", "Diff")), \(x) round(x, 2))) |> 
   rename(`Non-Roma` = `0`, Roma = `1`) |> 
-  # normal approximation of binomial
-  mutate(`Var Non-Roma` = signif(`Non-Roma`*(1-`Non-Roma`)/2168, 3),
-         `Var Roma` = signif(`Roma`*(1-`Roma`)/4592, 3),
-         `SD total` = signif(sqrt(`Var Roma` + `Var Non-Roma`), 3),
-         p = signif(dnorm(Diff, mean = 0, sd = `SD total`), 3),
-         Signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")))
-
-# clean covariate names
-rownames(summary_tab) <- gsub("_", " ", rownames(summary_tab)) |> stringr::str_to_sentence()
+  # # normal approximation of binomial
+  # mutate(`Var Non-Roma` = signif(2168*`Non-Roma`*(1-`Non-Roma`), 3),
+  #        `Var Roma` = signif(4592*`Roma`*(1-`Roma`), 3),
+  #        `SD total` = signif(sqrt(`Var Roma` + `Var Non-Roma`), 3),
+  #        p = signif(dnorm(Diff, mean = 0, sd = `SD total`), 3),
+  #        Signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")))
+  tibble::rownames_to_column(var = "name") |> 
+  separate(name, c("variable", "stat"), sep = "\\.") |> 
+  data.table::setDT() |> 
+  data.table::dcast(variable ~ stat, value.var = c("All", "Non-Roma", "Roma", "Diff")) |> 
+  mutate(
+    `sd total` = signif(sqrt(Roma_sd^2 + `Non-Roma_sd`^2), 3),
+    p = signif(dnorm(Diff_mean, mean = 0, sd = `sd total`), 3),
+    Signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")),
+    # clean covariate names
+    variable = gsub("_", " ", variable) |> stringr::str_to_sentence())
 
 summary_tab
 
@@ -177,7 +190,7 @@ write.csv(summary_tab, file = "../output/summary_tab.csv")
 
 # this seems to be a nice option
 ##TODO: split into Roma/non-Roma columns
-psych::describe(data)
+psych::describe(data[, tab_var_names])
 
 ########################################
 
@@ -266,7 +279,7 @@ model0_si <- glm(screening_initiative ~ community_support_n*sample,
                  data = data, family = "binomial")
 
 model_si <- glm(screening_initiative ~ community_support_n + sample + own_norms_n + discrimination_ethnicity +
-                                       age + no_educ + female + afford_n + health_insurance + country + asset_index,
+                  age + no_educ + female + afford_n + health_insurance + country + asset_index,
                 data = data, family = "binomial")
 
 # Cluster-robust standard errors
