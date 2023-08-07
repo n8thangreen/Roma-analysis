@@ -1,6 +1,7 @@
 
 # Roma regressions
 # translated from original STATA code
+# Empirical Analysis_ Do File.do
 
 library(foreign)
 library(estimatr)
@@ -17,16 +18,29 @@ library(tidyr)
 data <- haven::read_dta("../data/dataDEF.dta")
 
 country_labels <- names(attributes(data$country)$labels)
-sample_labels <- names(attributes(data$sample)$labels)
+sample_labels <- names(attributes(data$sample)$labels)   # Roma/Non-Roma
 
 data$country_labels <- country_labels[data$country]
 data$sample_labels <- sample_labels[data$sample + 1]
 
 # 1) Screening initiative
-# 0-4, NA
-data$screening_initiative <- ifelse(data$screening > 0, 1, 0)
-data$screening_initiative <- ifelse(data$screening_initiative != 1, 0, 1)
+# occurrence of medical services received
+# previous 12 months medical check-ups part of any consultation:
+# 
+# 0 None  
+# 1 dental check-up
+# 2 x-ray, ultrasound or other scan
+# 3 cholesterol test
+# 4 heart check-up
+# NA
+#
+# 1 if >0 screening
+# 0 otherwise
 
+data$screening_initiative <- ifelse(data$screening > 0, 1, 0)
+data$screening_initiative <- ifelse(data$screening_initiative != 1, 0, 1)  ##TODO: is this to replace NA with 0?
+
+# intersection of screening and identity
 data$screening_initiative_roma <- ifelse(data$screening_initiative == 1 & data$sample == 1, 1, 0)
 data$screening_initiative_roma <- ifelse(data$screening_initiative == 0 & data$sample == 1, 0, 1)
 
@@ -40,12 +54,14 @@ plot_dat <- data |>
   mutate(low = prop - 1.96*sqrt(prop*(1-prop)/n),
          upp = prop + 1.96*sqrt(prop*(1-prop)/n))
 
-# Graph bar
+# bar chart
 ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))) +
   geom_bar(stat="identity", position="dodge") +
   labs(title = "Access to healthcare services") +
   labs(fill = "Screening initiative") +
   theme_bw() +
+  xlab("Country") +
+  ylab("Proportion") +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
 
 ggsave("../plots/barplot_healthcare_access.png", width = 8, height = 7)
@@ -56,12 +72,24 @@ ggplot(plot_dat, aes(country_labels, prop)) +
     aes(ymin = low, ymax = upp, color = factor(sample_labels)),
     position = position_dodge(0.3), width = 0.2) +
   ylim(0,1) +
+  xlab("Country") +
+  ylab("Proportion") +
   geom_point(aes(color = factor(sample_labels)), position = position_dodge(0.3)) +
-  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  scale_color_discrete(name = "") +
+  scale_color_manual(values = c("#00AFBB", "#E7B800"))
 
 ggsave("../plots/boxplot_healthcare_access.png", width = 8, height = 7)
 
 # 2) Health behavior
+# individuals are aware of needing health consultation, but decide to avoid it
+# value          label
+# 1              Yes - felt need of a medical and avoided
+# 0              No
+# 888997         DK (Don't Know)
+# 888998         RF (Refused)
+
+# intersection of health avoidance and identity
 data$health_behavior_roma <- ifelse(data$health_behavior == 1 & data$sample == 1, 1, 0)
 data$health_behavior_roma <- ifelse(data$health_behavior == 0 & data$sample == 1, 0, 1)
 
@@ -75,11 +103,13 @@ plot_dat <- data |>
   mutate(low = prop - 1.96*sqrt(prop*(1-prop)/n),
          upp = prop + 1.96*sqrt(prop*(1-prop)/n))
 
-# Graph bar
+# bar chart
 ggplot(plot_dat, aes(x = country_labels, y = prop, fill = factor(sample_labels))) +
   geom_bar(stat="identity", position="dodge") +
   labs(title = "Unmet needs of medical care") +
   labs(fill = "Health-care avoidance") +
+  xlab("Country") +
+  ylab("Proportion") +
   theme_bw()
 
 ggsave("../plots/barplot_unmet_need.png", width = 8, height = 7)
@@ -90,8 +120,12 @@ ggplot(plot_dat, aes(country_labels, prop)) +
     aes(ymin = low, ymax = upp, color = factor(sample_labels)),
     position = position_dodge(0.3), width = 0.2) +
   ylim(0,1) +
+  xlab("Country") +
+  ylab("Proportion") +
   geom_point(aes(color = factor(sample_labels)), position = position_dodge(0.3)) +
-  scale_color_manual(values = c("#00AFBB", "#E7B800")) 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) +
+  scale_color_discrete(name = "")
 
 ggsave("../plots/boxplot_unmet_need.png", width = 8, height = 7)
 
@@ -120,14 +154,18 @@ summary_tab <-
   bind_rows(tab_all, tab_01) |>
   t() |>
   as.data.frame() |> 
-  mutate(diff = `0` - `1`,
-         across(all_of(c("All", "0", "1", "diff")), \(x) round(x, 2))) |> 
+  mutate(Diff = `0` - `1`,
+         across(all_of(c("All", "0", "1", "Diff")), \(x) round(x, 2))) |> 
   rename(`Non-Roma` = `0`, Roma = `1`) |> 
-  mutate(var0 = `Non-Roma`*(1-`Non-Roma`)/2168,
-         var1 = `Roma`*(1-`Roma`)/4592,
-         sd_total = sqrt(var0 + var1),
-         p = dnorm(diff, mean = 0, sd = sd_total),
-         signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")))
+  # normal approximation of binomial
+  mutate(`Var Non-Roma` = signif(`Non-Roma`*(1-`Non-Roma`)/2168, 3),
+         `Var Roma` = signif(`Roma`*(1-`Roma`)/4592, 3),
+         `SD total` = signif(sqrt(`Var Roma` + `Var Non-Roma`), 3),
+         p = signif(dnorm(Diff, mean = 0, sd = `SD total`), 3),
+         Signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")))
+
+# clean covariate names
+rownames(summary_tab) <- gsub("_", " ", rownames(summary_tab)) |> stringr::str_to_sentence()
 
 summary_tab
 
@@ -142,7 +180,6 @@ write.csv(summary_tab, file = "../output/summary_tab.csv")
 psych::describe(data)
 
 ########################################
-# Presentation of EXPLANATORY VARIABLES
 
 # 1) Community support
 # value           label
@@ -228,7 +265,8 @@ type_neighbourhood <- c("town", "village", "capital", "city", "unregulated_area"
 model0_si <- glm(screening_initiative ~ community_support_n*sample,
                  data = data, family = "binomial")
 
-model_si <- glm(screening_initiative ~ community_support_n + sample + own_norms_n + discrimination_ethnicity + age + no_educ + female + afford_n + health_insurance + country + asset_index,
+model_si <- glm(screening_initiative ~ community_support_n + sample + own_norms_n + discrimination_ethnicity +
+                                       age + no_educ + female + afford_n + health_insurance + country + asset_index,
                 data = data, family = "binomial")
 
 # Cluster-robust standard errors
