@@ -238,8 +238,8 @@ data_asset <- with(data, data.frame(
 kmo <- KMO(data_asset)
 
 # PCA
-pcs_res <- principal(data_asset)
-asset_scores <- pcs_res$scores
+pca_res <- principal(data_asset)
+asset_scores <- pca_res$scores
 asset_quantiles <- quantile(asset_scores, na.rm = TRUE)
 asset_index <- cut(asset_index, breaks = asset_quantiles)
 levels(asset_index) <- c("Poorest", "Poorer", "Middle", "Richer", "Richest")
