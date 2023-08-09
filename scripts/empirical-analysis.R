@@ -257,6 +257,9 @@ data$notaxes_acceptance <- !data$notaxes_acceptance %in% c(2,3)
 data$officialbribe_acceptance <- !data$officialbribe_acceptance %in% c(2,3)
 data$stealingfood_acceptance <- !data$stealingfood_acceptance %in% c(2,3)
 
+own_norms <- any(citizenbribe_acceptance, notaxes_acceptance, officialbribe_acceptance, stealingfood_acceptance)
+own_norms_n <- (own_norms - 0)/4
+
 ###############################
 # create asset index using PCA
 
@@ -273,9 +276,6 @@ asset_scores <- pca_res$scores
 asset_quantiles <- quantile(asset_scores, na.rm = TRUE)
 asset_index <- cut(asset_scores, breaks = asset_quantiles)
 levels(asset_index) <- c("Poorest", "Poorer", "Middle", "Richer", "Richest")
-
-own_norms <- any(citizenbribe_acceptance notaxes_acceptance officialbribe_acceptance stealingfood_acceptance)
-own_norms_n <- (own_norms - 0)/4
 
 data_Roma <- subset(data, sample == 1)
 data_nonRoma <- subset(data, sample == 0)
