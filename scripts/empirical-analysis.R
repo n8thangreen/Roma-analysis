@@ -77,7 +77,8 @@ ggplot(plot_dat, aes(country_labels, prop)) +
   geom_point(aes(color = factor(sample_labels)), position = position_dodge(0.3)) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
   scale_color_discrete(name = "") +
-  scale_color_manual(values = c("#00AFBB", "#E7B800"))
+  scale_color_manual(values = c("#00AFBB", "#E7B800")) +
+  scale_color_discrete(name = "")
 
 ggsave("../plots/boxplot_healthcare_access.png", width = 8, height = 7)
 
@@ -198,8 +199,10 @@ psych::describe(data[, tab_var_names])
 
 ########################################
 
-# 1) Community support
-# value           label
+# 1) community_support
+
+# first_support:
+# value                  label
 # 1                      A friend
 # 2             A relative/family
 # 3                      Employer
@@ -208,16 +211,24 @@ psych::describe(data[, tab_var_names])
 # 6                        A bank
 # 7    A microfinance institution
 # 8                     Local NGO
-# 95                         Other
-# 96                        No one
+# 95                        Other
+# 96                       No one
 # 888998    RF/DK (Refused/Don't Know)
 
 ##TODO: should this be 96: No one?
-## does NA mean No one?
-## if the first one if No one then it doesnt make sense to have anything for the others
-## similarly for second_support
-data$community_support <- ifelse(data$first_support > 0 | data$second_support > 0 | data$third_support > 0, 1, 0)
-data$community_support <- data$first_support != 96 | data$second_support != 96 | data$third_support != 96
+## does <NA> mean 888998 or `No one`?
+## if the first one if `No one` then it doesnt make sense to have anything for the others?
+## similarly for second_support?
+## would community be friend, family, rich man in community only?
+
+# data$community_support <- ifelse(data$first_support > 0 | data$second_support > 0 | data$third_support > 0, 1, 0)
+
+##TODO: assume that NA is 888998
+data$community_support <-
+  !data$first_support %in% c(96,888998,NA) |
+  !data$second_support %in% c(96,888998,NA) |
+  !data$third_support %in% c(96,888998,NA)
+
 
 ##TODO: why do this?
 data$community_support_n <- (data$community_support - 0) / 3
@@ -225,56 +236,60 @@ data$community_support_n <- (data$community_support - 0) / 3
 # data <- subset(data, select = -c(first_support, second_support, third_support, community_support))
 
 # 2) Follow Own norms
+
 # value       label
-# 1          Always acceptable
-# 2       Sometimes acceptable
+# 1           Always acceptable
+# 2           Sometimes acceptable
 # 3           Never acceptable
 # 888998 RF/DK (Refused/Don't Know)
 
+##TODO: rename these variables so not overwriting original?
+
+# replace RF/DK with NA
 data$citizenbribe_acceptance <- ifelse(data$citizenbribe_acceptance > 3, NA, data$citizenbribe_acceptance)
-data$citizenbribe_acceptance <- ifelse(data$citizenbribe_acceptance == 3 | data$citizenbribe_acceptance == 2, 0, data$citizenbribe_acceptance)
-
 data$notaxes_acceptance <- ifelse(data$notaxes_acceptance > 3, NA, data$notaxes_acceptance)
-data$notaxes_acceptance <- ifelse(data$notaxes_acceptance == 3 | data$notaxes_acceptance == 2, 0, data$notaxes_acceptance)
-
 data$officialbribe_acceptance <- ifelse(data$officialbribe_acceptance > 3, NA, data$officialbribe_acceptance)
-data$officialbribe_acceptance <- ifelse(data$officialbribe_acceptance == 3 | data$officialbribe_acceptance == 2, 0, data$officialbribe_acceptance)
-
 data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance > 3, NA, data$stealingfood_acceptance)
 
-##Error
-data$stealingfood_acceptance <- ifelse(data$stealingfood_acceptance == 2 | data)
+# is never acceptable?
+data$citizenbribe_acceptance <- !data$citizenbribe_acceptance %in% c(2,3)
+data$notaxes_acceptance <- !data$notaxes_acceptance %in% c(2,3)
+data$officialbribe_acceptance <- !data$officialbribe_acceptance %in% c(2,3)
+data$stealingfood_acceptance <- !data$stealingfood_acceptance %in% c(2,3)
 
-# Create an asset index
-data_asset <- with(data, data.frame(
+###############################
+# create asset index using PCA
+
+data_asset <- with(data, tibble(
   radio, tv, bike, car, horse, computer, internet, phone, washingmachine,
   bed_foreach, books30, powergenerator, kitchen, piped, toilet, wastewater,
   bathroom, electricity, heating))
 
-# Measure of Sampling Adequacy
-kmo <- KMO(data_asset)
+# measure of sampling adequacy
+kmo <- psych::KMO(data_asset)
 
-# PCA
-pca_res <- principal(data_asset)
+pca_res <- psych::principal(data_asset)
 asset_scores <- pca_res$scores
 asset_quantiles <- quantile(asset_scores, na.rm = TRUE)
-asset_index <- cut(asset_index, breaks = asset_quantiles)
+asset_index <- cut(asset_scores, breaks = asset_quantiles)
 levels(asset_index) <- c("Poorest", "Poorer", "Middle", "Richer", "Richest")
 
 data_Roma <- subset(data, sample == 1)
 data_nonRoma <- subset(data, sample == 0)
 
-# summary statistics using stargazer
-stargazer(data_Roma, title = "Sample 1 Characteristics", digits = 2, type = "text")
-stargazer(data_nonRoma, title = "Sample 0 Characteristics", digits = 2, type = "text")
-
 type_neighbourhood <- c("town", "village", "capital", "city", "unregulated_area")
+
+##TODO:
+# # summary statistics using stargazer
+# stargazer(data_Roma, title = "Sample 1 Characteristics", digits = 2, type = "text")
+# stargazer(data_nonRoma, title = "Sample 0 Characteristics", digits = 2, type = "text")
+
 
 ##############
 # regressions
 ##############
 
-# 1) Occurrence of health services
+## 1) Occurrence of health services
 
 # logistic regression model
 ##TODO: interaction term for sample*community_support?
@@ -282,20 +297,24 @@ type_neighbourhood <- c("town", "village", "capital", "city", "unregulated_area"
 model0_si <- glm(screening_initiative ~ community_support_n*sample,
                  data = data, family = "binomial")
 
-model_si <- glm(screening_initiative ~ community_support_n + sample + own_norms_n + discrimination_ethnicity +
+model_si <- glm(screening_initiative ~ community_support_n + sample + discrimination_ethnicity +  # own_norms_n +
                   age + no_educ + female + afford_n + health_insurance + country + asset_index,
                 data = data, family = "binomial")
 
-# Cluster-robust standard errors
+# cluster-robust standard errors
 vcov <- sandwich::vcovCL(model_si, cluster = data$municipality_n)
 
-# Create a table with coefficient estimates
+# table with coefficient estimates
 coef_table <- cbind(coef(model_si), sqrt(diag(vcov)))
 
-stargazer(coef_table, title = "Logistic Regression Results", column.labels = c("Estimate", "SE"), digits = 2, header = TRUE)
+# output table
+stargazer(coef_table, title = "Logistic regression health services results", column.labels = c("Estimate", "SE"),
+          digits = 2, header = TRUE, type = "text")
 
-# 2) Health behaviour
+## 2) Health behaviour
 
 model0_hb <- glm(health_behavior ~ community_support*sample,
                  data = data, family = "binomial")
 
+stargazer(model0_hb, title = "Logistic regression health behaviour results", column.labels = c("Estimate", "SE"),
+          digits = 2, header = TRUE, type = "text")
