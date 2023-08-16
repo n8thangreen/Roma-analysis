@@ -37,6 +37,10 @@ data$sample_labels <- sample_labels[data$sample + 1]
 # 1 if >0 screening
 # 0 otherwise
 
+
+# missing only if all of the screening missing
+# look at original cleaning script how this is done
+
 data$screening_initiative <- ifelse(data$screening > 0, 1, 0)
 data$screening_initiative <- ifelse(data$screening_initiative != 1, 0, 1)  ##TODO: is this to replace NA with 0?
 
@@ -199,7 +203,20 @@ psych::describe(data[, tab_var_names])
 
 ########################################
 
+# What about question B2: why not consult a doctor?
+#   12. Don’t like to go because they are prejudiced against the Roma
+
 # 1) community_support
+
+# QUESTION:
+# Think about an emergency situation that requires you to raise £ in a couple of days, for example to
+# cover the cost of an urgent repair of your house. On whom can you rely on in such a situation? Please list the major three
+# options that come to your mind. SPONTANEOUS MULTIPLE RESPONSES
+
+# this is about raising money so not about advice as such
+# makes sense why there is a bank here now
+
+# stratify by 1-4, everything else
 
 # first_support:
 # value                  label
@@ -207,13 +224,16 @@ psych::describe(data[, tab_var_names])
 # 2             A relative/family
 # 3                      Employer
 # 4   A rich man in the community
+
 # 5 Social assistance institution
-# 6                        A bank
-# 7    A microfinance institution
+# 6                        A bank 
+# 7    A microfinance institution 
 # 8                     Local NGO
 # 95                        Other
 # 96                       No one
 # 888998    RF/DK (Refused/Don't Know)
+
+# number of different support
 
 ##TODO: should this be 96: No one?
 ## does <NA> mean 888998 or `No one`?
@@ -225,9 +245,9 @@ psych::describe(data[, tab_var_names])
 
 ##TODO: assume that NA is 888998
 data$community_support <-
-  !data$first_support %in% c(96,888998,NA) |
-  !data$second_support %in% c(96,888998,NA) |
-  !data$third_support %in% c(96,888998,NA)
+  !data$first_support %in% c(96, 888998, NA) |
+  !data$second_support %in% c(96, 888998, NA) |
+  !data$third_support %in% c(96, 888998, NA)
 
 
 ##TODO: why do this?
@@ -244,6 +264,8 @@ data$community_support_n <- (data$community_support - 0) / 3
 # 888998 RF/DK (Refused/Don't Know)
 
 ##TODO: rename these variables so not overwriting original?
+
+## this not used in Antonio's final analysis
 
 # replace RF/DK with NA
 data$citizenbribe_acceptance <- ifelse(data$citizenbribe_acceptance > 3, NA, data$citizenbribe_acceptance)
