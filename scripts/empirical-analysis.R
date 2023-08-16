@@ -181,10 +181,10 @@ summary_tab <-
   mutate(
     `sd total` = signif(sqrt(Roma_sd^2 + `Non-Roma_sd`^2), 3),
     p = ifelse(variable == "age",
-      signif(dnorm(Diff_mean, mean = 0, sd = `sd total`), 3),
-        # two-proportions z-test
-      signif(2*pnorm(abs(Diff_mean)/sqrt(All_mean*(1-All_mean)*(1/4592 + 1/2168)), lower.tail = FALSE), 3)
-      ),
+               signif(dnorm(Diff_mean, mean = 0, sd = `sd total`), 3),
+               # two-proportions z-test
+               signif(2*pnorm(abs(Diff_mean)/sqrt(All_mean*(1-All_mean)*(1/4592 + 1/2168)), lower.tail = FALSE), 3)
+    ),
     Signif = ifelse(p < 0.01, "**", ifelse(p < 0.05, "*", "")),
     # clean covariate names
     variable = gsub("_", " ", variable) |> stringr::str_to_sentence())
@@ -317,14 +317,21 @@ type_neighbourhood <- c("town", "village", "capital", "city", "unregulated_area"
 ## 1) Occurrence of health services
 
 # logistic regression model
-##TODO: interaction term for sample*community_support?
 
 model0_si <- glm(screening_initiative ~ community_support_n*sample,
                  data = data, family = "binomial")
 
-model_si <- glm(screening_initiative ~ community_support_n + sample + discrimination_ethnicity +  # own_norms_n +
+model_si <- glm(screening_initiative ~ community_support_n*sample + discrimination_ethnicity + own_norms_n +
                   age + no_educ + female + afford_n + health_insurance + country + asset_index,
                 data = data, family = "binomial")
+
+model_si_roma <- glm(screening_initiative ~ community_support_n + discrimination_ethnicity + own_norms_n +
+                       age + no_educ + female + afford_n + health_insurance + country + asset_index,
+                     data = data, subset = sample==1, family = "binomial")
+
+model_si_nonroma <- glm(screening_initiative ~ community_support_n + discrimination_ethnicity + own_norms_n +
+                          age + no_educ + female + afford_n + health_insurance + country + asset_index,
+                        data = data, subset = sample==2, family = "binomial")
 
 # cluster-robust standard errors
 vcov <- sandwich::vcovCL(model_si, cluster = data$municipality_n)
@@ -340,6 +347,18 @@ stargazer(coef_table, title = "Logistic regression health services results", col
 
 model0_hb <- glm(health_behavior ~ community_support*sample,
                  data = data, family = "binomial")
+
+model_hb <- glm(health_behavior ~ community_support*sample + discrimination_ethnicity + own_norms_n +
+                  age + no_educ + female + afford_n + health_insurance + country + asset_index,
+                data = data, family = "binomial")
+
+model_hb_roma <- glm(health_behavior ~ community_support + discrimination_ethnicity + own_norms_n +
+                       age + no_educ + female + afford_n + health_insurance + country + asset_index,
+                     data = data, subset = sample==1, family = "binomial")
+
+model_hb_nonroma <- glm(health_behavior ~ community_support + discrimination_ethnicity + own_norms_n +
+                          age + no_educ + female + afford_n + health_insurance + country + asset_index,
+                        data = data, subset = sample==2, family = "binomial")
 
 stargazer(model0_hb, title = "Logistic regression health behaviour results", column.labels = c("Estimate", "SE"),
           digits = 2, header = TRUE, type = "text")
