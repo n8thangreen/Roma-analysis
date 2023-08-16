@@ -279,6 +279,9 @@ data$notaxes_acceptance <- !data$notaxes_acceptance %in% c(2,3)
 data$officialbribe_acceptance <- !data$officialbribe_acceptance %in% c(2,3)
 data$stealingfood_acceptance <- !data$stealingfood_acceptance %in% c(2,3)
 
+own_norms <- any(citizenbribe_acceptance, notaxes_acceptance, officialbribe_acceptance, stealingfood_acceptance)
+own_norms_n <- (own_norms - 0)/4
+
 ###############################
 # create asset index using PCA
 
