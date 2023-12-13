@@ -4,6 +4,7 @@
 # https://www.statology.org/principal-components-analysis-in-r/
 
 
-
+# dimension reduction
+# 
 
 
