@@ -1,6 +1,10 @@
 clear all
-cd "/Users/antoniomarchitto/Desktop/DATASET/mydata"
-*** The first step is to convert the .sav files to dta files. Each country has 6 different survey parts. I created 6 different loops (6 countries). I renamed the sav files in this way: ALB=Albania BIH=Bosnia-Herzegovina KOS=Kosovo MKD= Macedonia MNE=Montenegro SRB=Serbia. For the numbers this is the legend:
+*Create a local directory (change this in order to execute the files)
+local dir "/Users/antoniomarchitto/Desktop/DATASET/mydata"
+cd `dir'
+
+*** The first step is to convert the .sav files to dta files. Each country has 6 different survey parts. 
+*** I created 6 different loops (6 countries). I renamed the sav files in this way: ALB=Albania BIH=Bosnia-Herzegovina KOS=Kosovo MKD= Macedonia MNE=Montenegro SRB=Serbia. For the numbers this is the legend:
 *** Module 0 - Management section ==1 , Module 1 - Hoseuhold mebers profile ==2 
 *** Module 1 - Parenting techniques == 3 , Module 3 - Status of the household == 4 
 *** Module 4 - Individual status and attitudes of the randomly selected respondent ==5 
@@ -43,7 +47,7 @@ import spss using SRB_`i'.sav, case(lower)
 save SRB_`i'.dta, replace
 }
 
-*** Now we use append to create 6 different data sets, corresponding to each of the 6 parts of the survey. Each data set containts the 6 countries. 
+*** Now we use append to create 6 different data sets, corresponding to each of the 6 parts of the survey. Each data set containts all the 6 countries. 
 
 * APPEND dataset  
 clear 
@@ -78,18 +82,19 @@ append using SRB_`i'.dta
 save data_`i'.dta, replace
 }
 
+***At the end, we have 6 different datasets, representing the 6 different modules (with all the 6 countries in each module)
 
 
 *MERGE 
 
-***Now, we are merging the obtained 6 datasets to obtain only one. Before that, sone data cleaning is required.
+***Now, we are merging the obtained 6 datasets to obtain only one. Before that, some data cleaning is required.
 
 *** REMINDER: the number of each data set corresponds to a specific module of the survey. Module 0 - Management section ==1 , Module 1 - Hoseuhold mebers profile ==2 
 *** Module 1 - Parenting techniques == 3 , Module 3 - Status of the household == 4 
 *** Module 4 - Individual status and attitudes of the randomly selected respondent ==5 
 *** MODULE 4 - G1 G2 sections == 6 
 
-*MODULE 0 - data_1.dta , HOUSEHOLD level
+*MODULE 0  Management Section - data_1.dta , HOUSEHOLD level.
 *We rename the variables of interest and we drop the ones we won't use.
 clear
 use data_1.dta
@@ -99,12 +104,25 @@ rename m9 type_house
 label var type_house "External evaluation of the household's dwelling"
 rename m11 number_members
 label var number_members "Total number of household members"
-drop m9_6_oth m10_8 m10_9 m10_10 m10_11 m11a m11b m11c m11d m12a m12a_oth m12b m12b_oth m14 m15 m16 m17 m18_1 m18_1_1_oth m18_2 m18_2_1_oth municipality_old municipality_new qarkus rrethis bashic region entity kanton area 
+order municipality, after(komune)
 
-elabel rename (*) (*_master)
+**In order to obtain one municipality variable, we need to fill the gaps in the variables by using the kanton or settlement values when needed. 
+
+gen municipality1 = municipality
+replace municipality1=komune if missing(municipality1)
+replace municipality1= settlement if missing(municipality1)
+
+encode municipality1, gen(municipality_n)
+order municipality_n, after(number_members)
+
+drop m9_6_oth m10_8 m10_9 m10_10 m10_11 m11a m11b m11c m11d m12a m12a_oth m12b m12b_oth m14 m15 m16 m17 m18_1 m18_1_1_oth m18_2 m18_2_1_oth municipality_old municipality_new qarkus rrethis bashic region entity kanton area
+elabel rename (*) (*_master) 
+
 save data_1.dta, replace
 
-*MODULE 3 - Status of the household == data_4.dta
+*** This dataset contains 12 variables and 6760 observations
+
+*MODULE 3 - Status of the household == data_4.dta. HOUSEHOLD LEVEL
 ***Again, we rename the variables of interest and we drop those that we do not need. We keep all the variables related to the migration history. I might work on them. 
 clear 
 use data_4
@@ -144,39 +162,6 @@ rename q3_6_10 bed_foreach
 rename q3_6_11 books30
 rename q3_6_12 powergenerator
 
-** The next variable refers to the possibility to afford to pay for necessary expenses 
-rename q3_7_1 afford_rent
-rename q3_7_2 afford_heating
-rename q3_7_3 afford_holiday
-rename q3_7_4 afford_meat
-rename q3_7_5 afford_unexpectedexpenses
-rename q3_7_6 afford_drugs
-
-rename q3_14 hungry
-label var hungry "In the past month did you or anyone in your household ever go to bed hungry?"
-rename q3_15 economic_security
-label var economic_security "How would you assess the economic situation of your household?"
-
-*We create a summative scale variable related to economic security of households (in terms of affording)
-global afford afford_rent afford_heating afford_holiday afford_meat afford_unexpectedexpenses afford_drugs
-
-local x $afford
-foreach var of varlist `x'* {
-replace `var'=0 if `var'==2
-replace `var'=. if `var'>2
-}
-
-corr $afford
-alpha $afford
-egen afford= anycount($afford), values(1)
-
-
-
-*The missing values of the summative variable will be held as following: the summative scale variable will be missing if there is a missing value for one of the variables that constitutes it. 
-replace afford=. if afford_rent==. | afford_heating==. | afford_holiday==. | afford_meat==. | afford_unexpectedexpenses==. | afford_drugs==.
-gen afford_n=(afford-0)/(6)
-label var afford_n "Indicator of affordability"
-drop afford 
 
 *The following variables related to the possession of items will allow to create an asset index for each household
 
@@ -196,13 +181,15 @@ gen heating=1 if q3_9h==1
 replace heating=0 if q3_9h==2
 
 
+drop settlement type region percentage_of_roma entity kanton municipality area municipality_old municipality_new komune qarkus rrethis bashic  q1_4_20_oth q1_5d q1_5h q1_5l q1_6 q1_8_3 q1_8a_3 q1_8_8 q1_8a_8 q1_9_95_oth q1_10_3 q1_10_95_oth q2_1a q2_1b q2_1c q2_1d q2_1e q2_1f q2_1_oth q2_2 q2_2a q2_3 q2_4 q2_5 q2_6_1 q2_6_2 q2_6_3 q2_6_4 q2_6_5 q2_6_6 q2_6_7 q2_6_oth g1 g1_1_1 g1_1_2 g1_1_3 g1_1_4 g1_1_5 g1_1_6 g1_1_7 g1_1_8 g1_1_8_oth g1_2_1 g1_3_1 g1_4_1 g1_5_1_9999 g1_5_1_1 g1_5_1_2 g1_5_1_3 g1_5_1_4 g1_5_1_5 g1_5_1_6 g1_5_1_7 g1_5_1_8 g1_5_1_9 g1_5_1_10 g1_2_2 g1_3_2 g1_4_2 g1_5_2_9999 g1_5_2_1 g1_5_2_2 g1_5_2_3 g1_5_2_4 g1_5_2_5 g1_5_2_6 g1_5_2_7 g1_5_2_8 g1_5_2_9 g1_5_2_10 g1_2_3 g1_3_3 g1_4_3 g1_5_3_9999 g1_5_3_1 g1_5_3_2 g1_5_3_3 g1_5_3_4 g1_5_3_5 g1_5_3_6 g1_5_3_7 g1_5_3_8 g1_5_3_9 g1_5_3_10 g1_2_4 g1_3_4 g1_4_4 g1_5_4_9999 g1_5_4_1 g1_5_4_2 g1_5_4_3 g1_5_4_4 g1_5_4_5 g1_5_4_6 g1_5_4_7 g1_5_4_8 g1_5_4_9 g1_5_4_10 g1_2_5 g1_3_5 g1_4_5 g1_5_5_9999 g1_5_5_1 g1_5_5_2 g1_5_5_3 g1_5_5_4 g1_5_5_5 g1_5_5_6 g1_5_5_7 g1_5_5_8 g1_5_5_9 g1_5_5_10 g1_2_6 g1_3_6 g1_4_6 g1_5_6_9999 g1_5_6_1 g1_5_6_2 g1_5_6_3 g1_5_6_4 g1_5_6_5 g1_5_6_6 g1_5_6_7 g1_5_6_8 g1_5_6_9 g1_5_6_10 g1_2_7 g1_3_7 g1_4_7 g1_5_7_9999 g1_5_7_1 g1_5_7_2 g1_5_7_3 g1_5_7_4 g1_5_7_5 g1_5_7_6 g1_5_7_7 g1_5_7_8 g1_5_7_9 g1_5_7_10 g1_2_8 g1_3_8 g1_4_8 g1_5_8_9999 g1_5_8_1 g1_5_8_2 g1_5_8_3 g1_5_8_4 g1_5_8_5 g1_5_8_6 g1_5_8_7 g1_5_8_8 g1_5_8_9 g1_5_8_10 g2_1_3 g2_1_4 g2_1_5 g2_2_1 g2_3_1 g2_4_1_9999 g2_4_1_1 g2_4_1_2 g2_4_1_3 g2_4_1_4 g2_4_1_5 g2_4_1_6 g2_4_1_7 g2_4_1_8 g2_4_1_9 g2_4_1_10 g2_2_2 g2_3_2 g2_4_2_9999 g2_4_2_1 g2_4_2_2 g2_4_2_3 g2_4_2_4 g2_4_2_5 g2_4_2_6 g2_4_2_7 g2_4_2_8 g2_4_2_9 g2_4_2_10 g2_2_3 g2_3_3 g2_4_3_9999 g2_4_3_1 g2_4_3_2 g2_4_3_3 g2_4_3_4 g2_4_3_5 g2_4_3_6 g2_4_3_7 g2_4_3_8 g2_4_3_9 g2_4_3_10 g2_2_4 g2_3_4 g2_4_4_9999 g2_4_4_1 g2_4_4_2 g2_4_4_3 g2_4_4_4 g2_4_4_5 g2_4_4_6 g2_4_4_7 g2_4_4_8 g2_4_4_9 g2_4_4_10 g2_2_5 g2_3_5 g2_4_5_9999 g2_4_5_1 g2_4_5_2 g2_4_5_3 g2_4_5_4 g2_4_5_5 g2_4_5_6 g2_4_5_7 g2_4_5_8 g2_4_5_9 g2_4_5_10 g3_1_3 g3_1_4 g3_1_5 g3_2_1 g3_3_1 g3_4_1_9999 g3_4_1_1 g3_4_1_2 g3_4_1_3 g3_4_1_4 g3_4_1_5 g3_4_1_6 g3_4_1_7 g3_4_1_8 g3_4_1_9 g3_4_1_10 g3_2_2 g3_3_2 g3_4_2_9999 g3_4_2_1 g3_4_2_2 g3_4_2_3 g3_4_2_4 g3_4_2_5 g3_4_2_6 g3_4_2_7 g3_4_2_8 g3_4_2_9 g3_4_2_10 g3_2_3 g3_3_3 g3_4_3_9999 g3_4_3_1 g3_4_3_2 g3_4_3_3 g3_4_3_4 g3_4_3_5 g3_4_3_6 g3_4_3_7 g3_4_3_8 g3_4_3_9 g3_4_3_10 g3_2_4 g3_3_4 g3_4_4_9999 g3_4_4_1 g3_4_4_2 g3_4_4_3 g3_4_4_4 g3_4_4_5 g3_4_4_6 g3_4_4_7 g3_4_4_8 g3_4_4_9 g3_4_4_10 g3_2_5 g3_3_5 g3_4_5_9999 g3_4_5_1 g3_4_5_2 g3_4_5_3 g3_4_5_4 g3_4_5_5 g3_4_5_6 g3_4_5_7 g3_4_5_8 g3_4_5_9 g3_4_5_10 g4_1_3 g4_1_4 g4_1_5 g4_1_6 g4_1_7 g4_1_8 g4_2_1 g4_3_1 g4_2_2 g4_3_2 g4_2_3 g4_3_3 g4_2_4 g4_3_4 g4_2_5 g4_3_5 g3_2_6 g3_3_6 g3_2_7 g3_3_7 g3_2_8 g3_3_8 g6_1 g6_2 g7_1 g7_2 g9 g9_1 g9_2 g10 g10_1 g10_2 g12 q3_1 q3_4_95_oth q3_4_clan q3_8 q3_8_95_oth  q3_10 q3_10_95_oth q3_11 q3_11_95_oth q3_12a q3_12b q3_12c q3_12d q3_12e q3_12f q3_12g q3_12h q3_12i q3_13a_1 q3_13a_2 q3_13a_3 q3_13b_1 q3_13b_2 q3_13b_3 q3_13c_1 q3_13c_2 q3_13c_3 q3_13d_1 q3_13d_2 q3_13d_3 q3_13e_1 q3_13e_2 q3_13e_3 q3_13f_1 q3_13f_2 q3_13f_3 q3_13g_1 q3_13g_2 q3_13g_3 q3_13h_1 q3_13h_2 q3_13h_3 q3_13i_1 q3_13i_2 q3_13i_3 q3_8 q3_8_95_oth  q3_10 q3_10_95_oth q3_11 q3_11_95_oth q3_12a q3_12b q3_12c q3_12d q3_12e q3_12f q3_12g q3_12h q3_12i q3_13a_1 q3_13a_2 q3_13a_3 q3_13b_1 q3_13b_2 q3_13b_3 q3_13c_1 q3_13c_2 q3_13c_3 q3_13d_1 q3_13d_2 q3_13d_3 q3_13e_1 q3_13e_2 q3_13e_3 q3_13f_1 q3_13f_2 q3_13f_3 q3_13g_1 q3_13g_2 q3_13g_3 q3_13h_1 q3_13h_2 q3_13h_3 q3_13i_1 q3_13i_2 q3_13i_3 q3_9a q3_9b q3_9c q3_9d q3_9e q3_9f q3_9g q3_9h q1_5a q1_5b q1_5c q1_5e q1_5f q1_5g q1_5i q1_5j q1_5k q1_8a_1 q1_8_2 q1_8a_2 q1_8_4 q1_8a_4 q1_8_5 q1_8a_5 q1_8_6 q1_8a_6 q1_8_7 q1_8a_7 q1_9 q1_10_1 q1_10_2 q1_11a q1_11b q1_11c q1_11d q1_11e g2 g2_1_1 g2_1_2 g3 g3_1_1 g3_1_2 g4 g4_1_1 g4_1_2 g6 g7 q3_5 q1_3a q1_3b q1_3b_95_oth q1_4_1 q1_4_2 q1_4_3 q3_7_1 q3_7_2 q3_7_3 q3_7_4 q3_7_4 q3_7_5 q3_7_6
 
-
-drop settlement type region percentage_of_roma entity kanton municipality area municipality_old municipality_new komune qarkus rrethis bashic  q1_4_20_oth q1_5d q1_5h q1_5l q1_6 q1_8_3 q1_8a_3 q1_8_8 q1_8a_8 q1_9_95_oth q1_10_3 q1_10_95_oth q2_1a q2_1b q2_1c q2_1d q2_1e q2_1f q2_1_oth q2_2 q2_2a q2_3 q2_4 q2_5 q2_6_1 q2_6_2 q2_6_3 q2_6_4 q2_6_5 q2_6_6 q2_6_7 q2_6_oth g1 g1_1_1 g1_1_2 g1_1_3 g1_1_4 g1_1_5 g1_1_6 g1_1_7 g1_1_8 g1_1_8_oth g1_2_1 g1_3_1 g1_4_1 g1_5_1_9999 g1_5_1_1 g1_5_1_2 g1_5_1_3 g1_5_1_4 g1_5_1_5 g1_5_1_6 g1_5_1_7 g1_5_1_8 g1_5_1_9 g1_5_1_10 g1_2_2 g1_3_2 g1_4_2 g1_5_2_9999 g1_5_2_1 g1_5_2_2 g1_5_2_3 g1_5_2_4 g1_5_2_5 g1_5_2_6 g1_5_2_7 g1_5_2_8 g1_5_2_9 g1_5_2_10 g1_2_3 g1_3_3 g1_4_3 g1_5_3_9999 g1_5_3_1 g1_5_3_2 g1_5_3_3 g1_5_3_4 g1_5_3_5 g1_5_3_6 g1_5_3_7 g1_5_3_8 g1_5_3_9 g1_5_3_10 g1_2_4 g1_3_4 g1_4_4 g1_5_4_9999 g1_5_4_1 g1_5_4_2 g1_5_4_3 g1_5_4_4 g1_5_4_5 g1_5_4_6 g1_5_4_7 g1_5_4_8 g1_5_4_9 g1_5_4_10 g1_2_5 g1_3_5 g1_4_5 g1_5_5_9999 g1_5_5_1 g1_5_5_2 g1_5_5_3 g1_5_5_4 g1_5_5_5 g1_5_5_6 g1_5_5_7 g1_5_5_8 g1_5_5_9 g1_5_5_10 g1_2_6 g1_3_6 g1_4_6 g1_5_6_9999 g1_5_6_1 g1_5_6_2 g1_5_6_3 g1_5_6_4 g1_5_6_5 g1_5_6_6 g1_5_6_7 g1_5_6_8 g1_5_6_9 g1_5_6_10 g1_2_7 g1_3_7 g1_4_7 g1_5_7_9999 g1_5_7_1 g1_5_7_2 g1_5_7_3 g1_5_7_4 g1_5_7_5 g1_5_7_6 g1_5_7_7 g1_5_7_8 g1_5_7_9 g1_5_7_10 g1_2_8 g1_3_8 g1_4_8 g1_5_8_9999 g1_5_8_1 g1_5_8_2 g1_5_8_3 g1_5_8_4 g1_5_8_5 g1_5_8_6 g1_5_8_7 g1_5_8_8 g1_5_8_9 g1_5_8_10 g2_1_3 g2_1_4 g2_1_5 g2_2_1 g2_3_1 g2_4_1_9999 g2_4_1_1 g2_4_1_2 g2_4_1_3 g2_4_1_4 g2_4_1_5 g2_4_1_6 g2_4_1_7 g2_4_1_8 g2_4_1_9 g2_4_1_10 g2_2_2 g2_3_2 g2_4_2_9999 g2_4_2_1 g2_4_2_2 g2_4_2_3 g2_4_2_4 g2_4_2_5 g2_4_2_6 g2_4_2_7 g2_4_2_8 g2_4_2_9 g2_4_2_10 g2_2_3 g2_3_3 g2_4_3_9999 g2_4_3_1 g2_4_3_2 g2_4_3_3 g2_4_3_4 g2_4_3_5 g2_4_3_6 g2_4_3_7 g2_4_3_8 g2_4_3_9 g2_4_3_10 g2_2_4 g2_3_4 g2_4_4_9999 g2_4_4_1 g2_4_4_2 g2_4_4_3 g2_4_4_4 g2_4_4_5 g2_4_4_6 g2_4_4_7 g2_4_4_8 g2_4_4_9 g2_4_4_10 g2_2_5 g2_3_5 g2_4_5_9999 g2_4_5_1 g2_4_5_2 g2_4_5_3 g2_4_5_4 g2_4_5_5 g2_4_5_6 g2_4_5_7 g2_4_5_8 g2_4_5_9 g2_4_5_10 g3_1_3 g3_1_4 g3_1_5 g3_2_1 g3_3_1 g3_4_1_9999 g3_4_1_1 g3_4_1_2 g3_4_1_3 g3_4_1_4 g3_4_1_5 g3_4_1_6 g3_4_1_7 g3_4_1_8 g3_4_1_9 g3_4_1_10 g3_2_2 g3_3_2 g3_4_2_9999 g3_4_2_1 g3_4_2_2 g3_4_2_3 g3_4_2_4 g3_4_2_5 g3_4_2_6 g3_4_2_7 g3_4_2_8 g3_4_2_9 g3_4_2_10 g3_2_3 g3_3_3 g3_4_3_9999 g3_4_3_1 g3_4_3_2 g3_4_3_3 g3_4_3_4 g3_4_3_5 g3_4_3_6 g3_4_3_7 g3_4_3_8 g3_4_3_9 g3_4_3_10 g3_2_4 g3_3_4 g3_4_4_9999 g3_4_4_1 g3_4_4_2 g3_4_4_3 g3_4_4_4 g3_4_4_5 g3_4_4_6 g3_4_4_7 g3_4_4_8 g3_4_4_9 g3_4_4_10 g3_2_5 g3_3_5 g3_4_5_9999 g3_4_5_1 g3_4_5_2 g3_4_5_3 g3_4_5_4 g3_4_5_5 g3_4_5_6 g3_4_5_7 g3_4_5_8 g3_4_5_9 g3_4_5_10 g4_1_3 g4_1_4 g4_1_5 g4_1_6 g4_1_7 g4_1_8 g4_2_1 g4_3_1 g4_2_2 g4_3_2 g4_2_3 g4_3_3 g4_2_4 g4_3_4 g4_2_5 g4_3_5 g3_2_6 g3_3_6 g3_2_7 g3_3_7 g3_2_8 g3_3_8 g6_1 g6_2 g7_1 g7_2 g9 g9_1 g9_2 g10 g10_1 g10_2 g12 q3_1 q3_4_95_oth q3_4_clan q3_8 q3_8_95_oth  q3_10 q3_10_95_oth q3_11 q3_11_95_oth q3_12a q3_12b q3_12c q3_12d q3_12e q3_12f q3_12g q3_12h q3_12i q3_13a_1 q3_13a_2 q3_13a_3 q3_13b_1 q3_13b_2 q3_13b_3 q3_13c_1 q3_13c_2 q3_13c_3 q3_13d_1 q3_13d_2 q3_13d_3 q3_13e_1 q3_13e_2 q3_13e_3 q3_13f_1 q3_13f_2 q3_13f_3 q3_13g_1 q3_13g_2 q3_13g_3 q3_13h_1 q3_13h_2 q3_13h_3 q3_13i_1 q3_13i_2 q3_13i_3 q3_8 q3_8_95_oth  q3_10 q3_10_95_oth q3_11 q3_11_95_oth q3_12a q3_12b q3_12c q3_12d q3_12e q3_12f q3_12g q3_12h q3_12i q3_13a_1 q3_13a_2 q3_13a_3 q3_13b_1 q3_13b_2 q3_13b_3 q3_13c_1 q3_13c_2 q3_13c_3 q3_13d_1 q3_13d_2 q3_13d_3 q3_13e_1 q3_13e_2 q3_13e_3 q3_13f_1 q3_13f_2 q3_13f_3 q3_13g_1 q3_13g_2 q3_13g_3 q3_13h_1 q3_13h_2 q3_13h_3 q3_13i_1 q3_13i_2 q3_13i_3 q3_9a q3_9b q3_9c q3_9d q3_9e q3_9f q3_9g q3_9h q1_5a q1_5b q1_5c q1_5e q1_5f q1_5g q1_5i q1_5j q1_5k q1_8a_1 q1_8_2 q1_8a_2 q1_8_4 q1_8a_4 q1_8_5 q1_8a_5 q1_8_6 q1_8a_6 q1_8_7 q1_8a_7 q1_9 q1_10_1 q1_10_2 q1_11a q1_11b q1_11c q1_11d q1_11e g2 g2_1_1 g2_1_2 g3 g3_1_1 g3_1_2 g4 g4_1_1 g4_1_2 g6 g7 q3_5 q1_3a q1_3b q1_3b_95_oth q1_4_1 q1_4_2 q1_4_3
 elabel rename (*) (*_master2)
 save data_4.dta, replace
 
-*HOUSEHOLD AND HOUSEHOLD MEMBERS PROFILES MODULE 1 data_2.dta
+**This dataset, after the cleaning, contains 35 variables and 6760 obs. 
+
+
+*HOUSEHOLD AND HOUSEHOLD MEMBERS PROFILES MODULE 1 data_2.dta. This dataset is at the individual level. 
 *General characteristics variables 
 clear
 use data_2.dta
@@ -268,7 +255,9 @@ drop a6_95_oth a8_95_oth ec2_2 ec2_3 ec2_4 ec2_5 ec2_6 ec2_7 ec2_8 ec2_9 ec2_10 
 elabel rename (*) (*_master3)
 save data_2.dta, replace
 
-*MODULE 4 data_5.dta
+*** This dataset, after the cleaning, contains 30 variables and 27205 obs. 
+
+*MODULE 4: individual status and attitudes of the randomly selected respondent, data_5.dta. 
 clear
 use data_5.dta
 
@@ -281,7 +270,7 @@ replace health_behavior=. if health_behavior!=0 & health_behavior!=1
 
 
 *** For the different medical screenings there is a distinguish between a screening that has been made by the respondent's initiative, by doctor's initiative, by a screening program. 
-*** For all the following screening variables, the number 2 states for own initiative, 3 for doctor's initiative and 4 for a screening program. If there is not the number the sources of initiative are considered together. 
+*** For all the following screening variables, value=1 if states for own initiative, value=2 for doctor's initiative and value=3 for a screening program. The variable takes value 4 if a screening has not been done.
 
 rename b3_a dental_screening
 rename b3_b xray_screening
@@ -291,6 +280,8 @@ rename b3_d heart_screening
 
 global screening dental_screening xray_screening cholesterol_screening heart_screening 
 
+
+*For each of the different screenings, we want to create 4 variables, differentiating the different sources of decisions. 
 
 local x $screening
 foreach var of varlist `x'* {
@@ -303,23 +294,24 @@ gen `var'4=1 if `var'==3
 replace `var'4=0 if `var'==1 |`var'==2 | `var'==4
 }
 
-***Now I consider a cumulative variable "Screening" that counts how many screenings despite the source. Then the variables with a number associated refer to the decomposition by source, thus 2= if it is by own initiative, 3= by doctor's initiative and 4 if by screening program. 
-*For the missing values, the cumulative variable is missing when at least one of the component variables is missing. 
+*We want to create 4 different variables. "Screening" describes if the respondent took a medical screening, independently from the source of decision. "Screening2" describes if the respondent took a screening from its own initiative. "Screening3" describes if the respondent took a screening because the doctor prescribed it. "Screening4" describes if the respondent took a screening in the presence of a screening program.  
+
+*For the missing values, the cumulative variable is missing if all the different screenings are missing at the same time. 
 
 egen screening= anycount(dental_screening xray_screening cholesterol_screening heart_screening), values(1 2 3)
-replace screening=. if dental_screening==. | xray_screening==. | cholesterol_screening==. | heart_screening==. 
+replace screening=. if dental_screening==. & xray_screening==. & cholesterol_screening==. & heart_screening==. 
 label var screening "Access to health services despite the source"
 
 egen screening2= anycount(dental_screening2 xray_screening2 cholesterol_screening2 heart_screening2), values(1)
-replace screening2=. if dental_screening2==. | xray_screening2==. | cholesterol_screening2==. | heart_screening2==. 
+replace screening2=. if dental_screening2==. & xray_screening2==. & cholesterol_screening2==. & heart_screening2==. 
 label var screening2 "Access to health services by own initiative"
 
 egen screening3= anycount(dental_screening3 xray_screening3 cholesterol_screening3 heart_screening3), values(1)
-replace screening3=. if dental_screening3==. | xray_screening3==. | cholesterol_screening3==. | heart_screening3==. 
+replace screening3=. if dental_screening3==. & xray_screening3==. & cholesterol_screening3==. & heart_screening3==. 
 label var screening3 "Access to health services by doctor's initiative"
 
 egen screening4= anycount(dental_screening4 xray_screening4 cholesterol_screening4 heart_screening4), values(1)
-replace screening4=. if dental_screening4==. | xray_screening4==. | cholesterol_screening4==. | heart_screening4==. 
+replace screening4=. if dental_screening4==. & xray_screening4==. & cholesterol_screening4==. & heart_screening4==. 
 label var screening4 "Access to health services by screening program"
 
 
@@ -346,13 +338,24 @@ rename q3_3e delaymarriagegirl_acceptance
 rename q3_5a husbandslapwife
 rename q3_5b wifeslaphusband
 
+
+*For the following questions the values will be inverted: marriage_acceptance and delaymarriagegirl_acceptance
+gen nomixedmarriage=1 if marriage_acceptance==3
+replace nomixedmarriage=3 if marriage_acceptance==1
+replace nomixedmarriage=2 if marriage_acceptance==2
+
+gen nodelaymarriage=1 if delaymarriagegirl_acceptance==3
+replace nodelaymarriage=3 if delaymarriagegirl_acceptance==1
+replace nodelaymarriage=2 if delaymarriagegirl_acceptance==2
+
+
 *The variable discrimination_ethnicity refers to the perceived discrimination of the respondent towards its own ethnicity
 rename j1_1a discrimination_ethnicity
 replace discrimination_ethnicity=0 if discrimination_ethnicity==2
 replace discrimination_ethnicity=. if discrimination_ethnicity>2
 label var discrimination_ethnicity "Feel discriminated for ethnicity"
 
-drop g20 g21 g22 b2_95_oth q1_a_95_oth q1_b_95_oth q1_c_95_oth komune qarkus rrethis bashic settlement type region percentage_of_roma entity kanton municipality area municipality_old municipality_new q4_2 q4_3 q4_4 q7a q7b q7c q7e q8  j2a j3a j4a j5a j6a j2b j3b j4b j5b j6b j2c j3c j4c j5c j6c j6d j2e j3e j4e j5e j6e l3a g3 g4_1 g4_2 g4_3 g4_95_oth g5 g6_1 g6_2 g6_3 g6_9_oth z1 z1_reason komune qarkus rrethis bashic settlement type region percentage_of_roma entity kanton municipality area municipality_old municipality_new j1_1b j1_1c j1_1d j1_1e j1_1f j1_1g j1_2 j2d j3d j4d j5d l3b l3f l3g q6_1 q6_2 q10 b4_a b4_b b4_c b3_e b3_f b2_1 b2_2 b2_3
+drop g20 g21 g22 b2_95_oth q1_a_95_oth q1_b_95_oth q1_c_95_oth komune qarkus rrethis bashic settlement type region percentage_of_roma entity kanton municipality area municipality_old municipality_new q4_2 q4_3 q4_4 q7a q7b q7c q7e q8  j2a j3a j4a j5a j6a j2b j3b j4b j5b j6b j2c j3c j4c j5c j6c j6d j2e j3e j4e j5e j6e l3a g3 g4_1 g4_2 g4_3 g4_95_oth g5 g6_1 g6_2 g6_3 g6_9_oth z1 z1_reason komune qarkus rrethis bashic settlement type region percentage_of_roma entity kanton municipality area municipality_old municipality_new j1_1b j1_1c j1_1d j1_1e j1_1f j1_1g j1_2 j2d j3d j4d j5d l3b l3f l3g q6_1 q6_2 q10 b4_a b4_b b4_c b2_1 b2_2 b2_3 b3_f b3_e
 
 elabel rename (*) (*_master4)
 save data_5.dta, replace
@@ -361,144 +364,17 @@ save data_5.dta, replace
 
 *Before merge between data 2 and data 4
 clear
-use data_4.dta
+use data_5.dta
 isid country psu hh_id hhm_id
 merge 1:m  country psu hh_id hhm_id using data_2.dta, gen(m1) 
 keep if m1==3
 *Now, with data 5 and 1 
-merge 1:1 sample country psu hh_id using data_5.dta, gen(m2) 
+merge 1:1 sample country psu hh_id using data_4.dta, gen(m2) 
 merge 1:1 sample country psu hh_id using data_1.dta, gen(m3)
 save dataDEF.dta, replace
 order hhm_id number_members sex role, after(hh_id)
 sort country psu hh_id 
 save dataDEF.dta, replace
-order municipality, after(komune)
-
-***Now I fixed some gaps in the data of municipalities, settlements and komune variables. I decided to take the municipality variable. There were some missing observations for the three variables. In the case of absence of municipalities, the settlement will be considered. 
-*Settlements 
-replace settlement="KAKANJ" if municipality=="KAKANJ"
-replace settlement="BIHAĆ" if municipality=="BIHAĆ"
-replace settlement="KLJUČ" if municipality=="KLJUČ"
-replace settlement="BANJA LUKA" if municipality=="BANJA LUKA"
-replace settlement="GRADIŠKA" if municipality=="GRADIŠKA"
-replace settlement="PRIJEDOR" if municipality=="PRIJEDOR"
-replace settlement="CENTAR SARAJEVO" if municipality=="CENTAR SARAJEVO"
-replace settlement="ILIDŽA" if municipality=="ILIDŽA"
-replace settlement="NOVI GRAD SARAJEVO" if municipality=="NOVI GRAD SARAJEVO"
-replace settlement="NOVO SARAJEVO" if municipality=="NOVO SARAJEVO"
-replace settlement="BANOVIĆI" if municipality=="BANOVIĆI"
-replace settlement="DOBOJ" if municipality=="DOBOJ"
-replace settlement="GRAČANICA" if municipality=="GRAČANICA"
-replace settlement="BRČKO" if municipality=="BRČKO"
-replace settlement="BOSANSKA KRUPA" if municipality=="BOSANSKA KRUPA"
-replace settlement="ZENICA" if municipality=="ZENICA"
-replace settlement="ZAVIDOVIĆI" if municipality=="ZAVIDOVIĆI"
-replace settlement="VITEZ" if municipality=="VITEZ"
-replace settlement="VISOKO" if municipality=="VISOKO"
-replace settlement="TRAVNIK" if municipality=="TRAVNIK"
-replace settlement="JAJCE" if municipality=="JAJCE"
-replace settlement="DONJI VAKUF" if municipality=="DONJI VAKUF"
-replace settlement="KONJIC" if municipality=="KONJIC"
-replace settlement="GRAD MOSTAR" if municipality=="GRAD MOSTAR"
-replace settlement="ŽIVINICE" if municipality=="ŽIVINICE"
-replace settlement="VUKOSAVLJE" if municipality=="VUKOSAVLJE"
-replace settlement="TUZLA" if municipality=="TUZLA"
-replace settlement="MODRIČA" if municipality=="MODRIČA"
-replace settlement="LUKAVAC" if municipality=="LUKAVAC"
-replace settlement="KISELJAK" if municipality=="KISELJAK"
-replace settlement="KALESIJA" if municipality=="KALESIJA"
-replace settlement="GRADAČAC" if municipality=="GRADAČAC"
-replace settlement="KISELJAK" if municipality=="KISELJAK"
-replace settlement="KISELJAK" if municipality=="KISELJAK"
-encode settlement, gen(settlement_)
-
-
-*In the case of absence of municipalities and settlements the "komune will be considered"
-replace municipality="Berat (qytet)" if komune=="Berat (qytet)"
-replace municipality="Ura e Kuçit" if komune=="Ura e Kuçit"
-replace municipality="Lagjia Stan/Moravë" if komune=="Lagjia Stan/Moravë"
-replace municipality="Kuçova" if komune=="Kuçova"
-replace municipality="Durrës" if komune=="Durrës"
-replace municipality="Shkozet (lagj.14)" if komune=="Shkozet (lagj.14)"
-replace municipality="Plazh (Mbikalimi)" if komune=="Plazh (Mbikalimi)"
-replace municipality="Qafa e ariut" if komune=="Qafa e ariut"
-replace municipality="Fushë-Kruja" if komune=="Fushë-Kruja"
-replace municipality="Cerrik" if komune=="Cerrik"
-replace municipality="Elbasan (qytet)" if komune=="Elbasan (qytet)"
-replace municipality="5 maji (Rapishte)" if komune=="5 maji (Rapishte)"
-replace municipality="Peqin" if komune=="Peqin"
-replace municipality="Baltëz (komuna Derrmenas)" if komune=="Baltëz (komuna Derrmenas)"
-replace municipality="Mbrostar Ura" if komune=="Mbrostar Ura"
-replace municipality="Lagj. Qender Azotik" if komune=="Lagj. Qender Azotik"
-replace municipality="Levan (Komuna)" if komune=="Levan (Komuna)"
-replace municipality="Roskoveci" if komune=="Roskoveci"
-replace municipality="Seman" if komune=="Seman"
-replace municipality="Komuna Grabian" if komune=="Komuna Grabian"
-replace municipality="Pluk" if komune=="Pluk"
-replace municipality="Gjirokaster" if komune=="Gjirokaster"
-replace municipality="Bilisht (Devoll)" if komune=="Bilisht (Devoll)"
-replace municipality="Korça (qytet) Shkolla Naim Frasheri" if komune=="Korça (qytet) Shkolla Naim Frasheri"
-replace municipality="Maliq (Korçë)" if komune=="Maliq (Korçë)"
-replace municipality="Sovjan (Korçë)" if komune=="Sovjan (Korçë)"
-replace municipality="Pojani (Korçë)" if komune=="Pojani (Korçë)"
-replace municipality="Pogradec (Qytet)" if komune=="Pogradec (Qytet)"
-replace municipality="Laç" if komune=="Laç"
-replace municipality="Lezhë (Rome+Egjiptiane)" if komune=="Lezhë (Rome+Egjiptiane)"
-replace municipality="Shengjini" if komune=="Shengjini"
-replace municipality="Shkodër (dy krahet e lumit Buna)" if komune=="Shkodër (dy krahet e lumit Buna)"
-replace municipality="Rrogozhina" if komune=="Rrogozhina"
-replace municipality="Josif Pashko/ Nish.Tulla Nr.3" if komune=="Josif Pashko/ Nish.Tulla Nr.3"
-replace municipality="Kombinat/Yzberisht" if komune=="Kombinat/Yzberisht"
-replace municipality="Bregu i lumit" if komune=="Bregu i lumit"
-replace municipality="N/stacioni elektrik" if komune=="N/stacioni elektrik"
-replace municipality="Kinostudio" if komune=="Kinostudio"
-replace municipality="Allias/B.Curri" if komune=="Allias/B.Curri"
-replace municipality="Seliata" if komune=="Seliata"
-replace municipality="Prilep" if settlement=="Prilep"
-replace municipality="Vataša" if settlement=="Vataša"
-replace municipality="Kavadarci" if settlement=="Kavadarci"
-replace municipality="Bitola" if settlement=="Bitola"
-replace municipality="Skopje - Šuto Orizari" if settlement=="Skopje - Šuto Orizari"
-replace municipality="Skopje - Saraj" if settlement=="Skopje - Saraj"
-replace municipality="Selo Dračevo" if settlement=="Selo Dračevo"
-replace municipality="Naselba Dračevo" if settlement=="Naselba Dračevo"
-replace municipality="Zlokukjani" if settlement=="Zlokukjani"
-replace municipality="Bujkovci" if settlement=="Bujkovci"
-replace municipality="Orizari" if settlement=="Orizari"
-replace municipality="Novo Selo" if settlement=="Novo Selo"
-replace municipality="Singelik" if settlement=="Singelik"
-replace municipality="Madžari" if settlement=="Madžari"
-replace municipality="Jurumleri" if settlement=="Jurumleri"
-replace municipality="Skopje - Čair" if settlement=="Skopje - Čair"
-replace municipality="Skopje - Centar" if settlement=="Skopje - Centar"
-replace municipality="Gorno Lisiče" if settlement=="Gorno Lisiče"
-replace municipality="Tetovo" if settlement=="Tetovo"
-replace municipality="Kumanovo" if settlement=="Kumanovo"
-replace municipality="Raštani" if settlement=="Raštani"
-replace municipality="Kičevo" if settlement=="Kičevo"
-replace municipality="Gostivar" if settlement=="Gostivar"
-replace municipality="Gorna Banjica" if settlement=="Gorna Banjica"
-replace municipality="Debar" if settlement=="Debar"
-replace municipality="Vinica" if settlement=="Vinica"
-replace municipality="Veles" if settlement=="Veles"
-replace municipality="Štip" if settlement=="Štip"
-replace municipality="Strumica" if settlement=="Strumica"
-replace municipality="Crnik" if settlement=="Crnik"
-replace municipality="Krivolak" if settlement=="Krivolak"
-replace municipality="Kriva Palanka" if settlement=="Kriva Palanka"
-replace municipality="Kočani" if settlement=="Kočani"
-replace municipality="Delčevo" if settlement=="Delčevo"
-replace municipality="Berovo" if settlement=="Berovo"
-replace municipality="Llakatund" if komune=="Llakatund"
-replace municipality="Novosela" if komune=="Novosela"
-replace municipality="Çuka" if komune=="Çuka"
-replace municipality="Konispol" if komune=="Konispol"
-replace municipality="Delvina" if komune=="Delvina"
-
-encode municipality, gen(municipality_n)
-order settlement_, after(municipality)
-order municipality_n, after(number_members)
-
 
 *Now, some final cleaning for the following binary variables
 
@@ -530,5 +406,8 @@ gen unregulated_area=1 if type_residence==5
 replace unregulated_area=0 if unregulated_area==.
 
 replace sample=0 if sample==2 
+
+label define country 1 "Serbia" 2 "Montenegro" 3 "Albania" 4 "Macedonia" 5 "Kosovo" 6 "Bosnia-Herz", modify
+label values country country
 
 save dataDEF.dta, replace
